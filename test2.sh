@@ -10,4 +10,3 @@ echo "===[Trains to work $DATESTR]==="
 python3 trainmon.py -d mrp -a lds
 python3 trainmon.py -d ses -a lds
 python3 trainmon.py -d lds -a sow
-

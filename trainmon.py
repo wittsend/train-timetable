@@ -85,37 +85,37 @@ def parseCmdLine():
         # username argument
         if lastArg == '-u':
             log.debug(f'User name specified on command line: {arg}')
-            arg_usrnm = arg
+            arg_usrnm = arg.strip()
 
         # API key argument
         elif lastArg == '-k':
             log.debug(f'API key specified on command line: {arg}')
-            arg_api_key = arg
+            arg_api_key = arg.strip()
 
         # credentials file argument
         elif lastArg == '-c':
-            arg_cred_file = arg
+            arg_cred_file = arg.strip()
 
         # departing station argument
         elif lastArg == '-d':
             log.debug(f'Departing station specified on command line: {arg}')
-            arg_dep_st = arg
+            arg_dep_st = arg.strip()
 
         # arriving station arument
         elif lastArg == '-a':
-            arg_arr_st = arg
+            arg_arr_st = arg.strip()
 
         # departing time argument
         elif lastArg == '-td':
-            arg_dep_time_id = parseTimeString(arg)
+            arg_dep_time_id = parseTimeString(arg.strip())
 
         # arriving time argument
         elif lastArg == '-ta':
-            arg_arr_time_id = parseTimeString(arg)
+            arg_arr_time_id = parseTimeString(arg.strip())
 
         # service uid argument
         elif lastArg == '-s':
-            arg_service_id = arg
+            arg_service_id = arg.strip()
 
         elif lastArg == '-v':
             arg_log_verb = int(arg)
@@ -360,15 +360,17 @@ def generate_arr_and_dep_list(d_services, a_services):
     # remaing arrival stations (that don't have pairs) to keep
     for s_pair in s_pairs:
         dest_name = s_pair[0].location_detail.destination[0].description
+        orig_name = s_pair[0].location_detail.origin[0].description
         if dest_name not in dest_stations:
-            dest_stations.append(dest_name)
+            dest_stations.append((orig_name, dest_name))
 
     # Go through the unmatched arrival entries, and filter out the entries that are going in the 
     # direction we want to go in
     for a_service in a_services:
         if(a_service.train_identity not in train_ids):
             dest_name = a_service.location_detail.destination[0].description
-            if dest_name in dest_stations:
+            orig_name = a_service.location_detail.origin[0].description
+            if (orig_name, dest_name) in dest_stations:
                 s_pairs.insert(0,(None, a_service))
 
 
