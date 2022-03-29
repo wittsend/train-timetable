@@ -16,10 +16,11 @@ class QueryTypes(IntFlag):
 TrainLocations = {
     None        :   "",
     "AT_PLAT"   :   "At platform",
-    "APPR_STAT" :   "Appr. station",
+    "APPR_STAT" :   "Apr. station",
     "APPR_PLAT" :   "Arriving",
-    "DEP_PREP"  :   "Preparing to dep.",
-    "DEP_READY" :   "Ready to depart"
+    "DEP_PREP"  :   "Prep. to dep.",
+    "DEP_READY" :   "Ready to dep.",
+    "Departed"  :   "Departed"
 }
 
 
@@ -230,14 +231,14 @@ def generate_arr_or_dep_line(serv_id, location, query_type : QueryTypes) -> str:
         if location.display_as in accepted_display_as:
             platform = f'Plat. {location.platform}'
             late = diffTimeStr(realtime, booked_time)
-            ttg_str = createTTGString(realtime)
-
-            if late > 0:
-                lateness = f'{late}m late ({realtime})'
-            elif late < 0:
-                lateness = f'{-late}m early ({realtime})'
+            if TrainLocations[location.service_location] != '':
+                lateness = TrainLocations[location.service_location]
+                ttg_str = ''
             else:
-                lateness = f'On time'
+                ttg_str = createTTGString(realtime)
+                lateness = createLatenessString(late, realtime)
+
+            
         else:
             if 'CANCELLED' in location.display_as:
                 lateness = "     Cancelled"
@@ -246,7 +247,7 @@ def generate_arr_or_dep_line(serv_id, location, query_type : QueryTypes) -> str:
             else:
                 return ''
                 
-        line = '{}: {}  {} {} {} {} --> {} {}'
+        line = '{}: {}  {} {} {} {} --> {}'
 
         result = line.format(\
             serv_id, \
@@ -255,8 +256,7 @@ def generate_arr_or_dep_line(serv_id, location, query_type : QueryTypes) -> str:
             ttg_str.ljust(ttg_width)[0:ttg_width], \
             platform.ljust(pf_width), \
             origin.ljust(station_name_width)[0:station_name_width], \
-            dest.ljust(station_name_width)[0:station_name_width], \
-            TrainLocations[location.service_location]
+            dest.ljust(station_name_width)[0:station_name_width]\
             )
     else:
         #result = f'Service {location.} not activated.'
@@ -286,8 +286,10 @@ def generate_arr_and_dep_line(s_pair):
         display_as = s_pair[1].location_detail.display_as
         dep_ttg_str = createTTGString(real_dep_time)
         if '-' in dep_ttg_str.lower():
-            dep_platform = 'Departed'
+            dep_platform = ''
+            dep_service_location = 'Departed'
         else:
+            dep_service_location = None
             dep_platform = '?'
     else:
         booked_dep_time = s_pair[0].location_detail.gbtt_booked_departure
@@ -296,28 +298,55 @@ def generate_arr_and_dep_line(s_pair):
         display_as = s_pair[0].location_detail.display_as
         dep_ttg_str = createTTGString(real_dep_time)
         dep_platform = s_pair[0].location_detail.platform
+        dep_service_location = s_pair[0].location_detail.service_location
 
-    train_id = s_pair[1].train_identity
-    booked_arr_time = s_pair[1].location_detail.gbtt_booked_arrival
-    real_arr_time = s_pair[1].location_detail.realtime_arrival
-    arr_platform = s_pair[1].location_detail.platform
-    dest_name = s_pair[1].location_detail.destination[0].description
-    call_name = s_pair[1].location_detail.description
+    if s_pair[1] == None:
+        train_id = s_pair[0].train_identity
+        #booked_arr_time = s_pair[0].location_detail.gbtt_booked_arrival
+        booked_arr_time = s_pair[0].location_detail.destination[0].public_time
+        #real_arr_time = s_pair[0].location_detail.realtime_arrival
+        real_arr_time = s_pair[0].location_detail.destination[0].public_time
+        #arr_platform = s_pair[0].location_detail.platform
+        arr_platform = '?'
+        #arr_service_location = s_pair[0].location_detail.service_location
+        arr_service_location = None
+
+        dest_name = s_pair[0].location_detail.destination[0].description
+        call_name = s_pair[0].location_detail.description
+    else:
+        train_id = s_pair[1].train_identity
+        booked_arr_time = s_pair[1].location_detail.gbtt_booked_arrival
+        real_arr_time = s_pair[1].location_detail.realtime_arrival
+        arr_platform = s_pair[1].location_detail.platform
+        arr_service_location = s_pair[1].location_detail.service_location
+
+        dest_name = s_pair[1].location_detail.destination[0].description
+        call_name = s_pair[1].location_detail.description
 
     if((s_pair[0] != None and s_pair[0].location_detail.realtime_activated) or s_pair[1].location_detail.realtime_activated):
+    #if(True):
         if dep_platform != 'Departed': dep_platform = f'Plat. {dep_platform}'
         arr_platform = f'Plat. {arr_platform}'
-        
         dep_late = diffTimeStr(real_dep_time, booked_dep_time)
-        dep_lateness = createLatenessString(dep_late, real_dep_time)
-        
         arr_late = diffTimeStr(real_arr_time, booked_arr_time) 
+        
         arr_lateness = createLatenessString(arr_late, real_arr_time)
         
-        
-        arr_ttg_str = createTTGString(real_arr_time)
+        if TrainLocations[dep_service_location] != '':
+            dep_lateness = TrainLocations[dep_service_location]
+            dep_ttg_str = ''
+        else:
+            dep_lateness = createLatenessString(dep_late, real_dep_time)
 
-        if 'CANCELLED' in display_as:
+        if TrainLocations[arr_service_location] != '':
+            arr_lateness = TrainLocations[arr_service_location]
+            arr_ttg_str = ''
+        else:
+            arr_lateness = createLatenessString(dep_late, real_dep_time)
+            arr_ttg_str = createTTGString(real_arr_time)
+
+
+        if 'CANCEL' in display_as.upper():
             arr_lateness = "     Cancelled"
             dep_lateness = "     Cancelled"
             dep_platform = '  ---'
@@ -346,6 +375,7 @@ def generate_arr_and_dep_list(d_services, a_services):
 
     s_pairs = []
     dest_stations = []
+    orig_stations = []
     train_ids = []
 
     # Find the matching services between the departures and arrivals and pair them up
@@ -363,6 +393,9 @@ def generate_arr_and_dep_list(d_services, a_services):
         orig_name = s_pair[0].location_detail.origin[0].description
         if dest_name not in dest_stations:
             dest_stations.append((orig_name, dest_name))
+        if orig_name not in orig_stations:
+            orig_stations.append((orig_name, dest_name))
+
 
     # Go through the unmatched arrival entries, and filter out the entries that are going in the 
     # direction we want to go in
@@ -373,18 +406,33 @@ def generate_arr_and_dep_list(d_services, a_services):
             if (orig_name, dest_name) in dest_stations:
                 s_pairs.insert(0,(None, a_service))
 
+    for d_service in d_services:
+        if(d_service.train_identity not in train_ids):
+            dest_name = d_service.location_detail.destination[0].description
+            orig_name = d_service.location_detail.origin[0].description
+            if (orig_name, dest_name) in orig_stations:
+                s_pairs.insert(0,(d_service, None))
+
 
     # Sort s_pairs by arrival station time (not final dest or origin)
     sort_list = []
     for s_pair in s_pairs:
-        sort_list.append((s_pair[1].location_detail.gbtt_booked_arrival, s_pair[1].train_identity))
+        if s_pair[0] == None:
+            sort_list.append((s_pair[1].location_detail.gbtt_booked_arrival, s_pair[1].train_identity))
+        if s_pair[1] == None:
+            sort_list.append((s_pair[0].location_detail.gbtt_booked_arrival, s_pair[0].train_identity))
         sort_list.sort()
     sorted_s_pairs = []
     for sort_item in sort_list:
         for s_pair in s_pairs:
-            if s_pair[1].train_identity == sort_item[1]:
-                sorted_s_pairs.append(s_pair)
-                break
+            if s_pair[0] == None:
+                if s_pair[1].train_identity == sort_item[1]:
+                    sorted_s_pairs.append(s_pair)
+                    break
+            if s_pair[1] == None:
+                if s_pair[0].train_identity == sort_item[1]:
+                    sorted_s_pairs.append(s_pair)
+                    break
 
     # Create a list of service strings to pass to the print table function
     for s_pair in sorted_s_pairs:
@@ -392,8 +440,12 @@ def generate_arr_and_dep_list(d_services, a_services):
         if(service_line != ''): result.append(service_line)
         # if(s_pair[0].location_detail.cancel_reason_long_text != None):
         #     result.append(f'  >>> {s_pair[0].location_detail.cancel_reason_long_text} <<<')
-        if(s_pair[1].location_detail.cancel_reason_long_text != None):
+        if(s_pair[1] != None and s_pair[1].location_detail.cancel_reason_long_text != None):
             result.append(f'  >>> {s_pair[1].location_detail.cancel_reason_long_text} <<<')
+        elif(s_pair[0] != None and s_pair[0].location_detail.cancel_reason_long_text != None):
+            result.append(f'  >>> {s_pair[0].location_detail.cancel_reason_long_text} <<<')
+        else:
+            pass
 
     return result
 
