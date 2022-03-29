@@ -1,5 +1,0 @@
-#!/bin/bash
-DATESTR=`date "+%A %e %B %Y - %H:%M:%S"`
-echo "===[Trains from work $DATESTR]==="
-python3 trainmon.py -a sow|grep -i -e "--> Leeds" -e "=====" -e "-----"
-python3 trainmon.py -d lds|grep -e "--> Sheffield" -e "--> Doncaster" -e "=====" -e "-----"

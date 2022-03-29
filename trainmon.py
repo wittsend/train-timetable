@@ -215,15 +215,18 @@ def generate_arr_or_dep_line(serv_id, location, query_type : QueryTypes) -> str:
     origin = location.origin[0].description
     dest = location.destination[0].description
     accepted_display_as = ''
+    cancel_code = location.cancel_reason_code
 
     if query_type & QueryTypes.DEP_ARR == QueryTypes.DEPARTURES:
         realtime = location.realtime_departure
         booked_time = location.gbtt_booked_departure
         accepted_display_as = 'ORIGIN CALL'
+        loc = f'to {dest}'
     elif query_type & QueryTypes.DEP_ARR == QueryTypes.ARRIVALS:
         realtime = location.realtime_arrival
         booked_time = location.gbtt_booked_arrival
         accepted_display_as = 'DESTINATION CALL'
+        loc = f'from {origin}'
     else:
         raise Exception(f'Invalid value for query_type {query_type}')
 
@@ -247,16 +250,19 @@ def generate_arr_or_dep_line(serv_id, location, query_type : QueryTypes) -> str:
             else:
                 return ''
                 
-        line = '{}: {}  {} {} {} {} --> {}'
+        #line = '{}: {}  {} {} {} {} --> {} {}'
+        line = '{}: {} {}  {} {} {} {}'
 
         result = line.format(\
             serv_id, \
             booked_time, \
+            loc.ljust(station_name_width)[0:station_name_width],\
             lateness.ljust(lateness_width)[0:lateness_width], \
             ttg_str.ljust(ttg_width)[0:ttg_width], \
             platform.ljust(pf_width), \
-            origin.ljust(station_name_width)[0:station_name_width], \
-            dest.ljust(station_name_width)[0:station_name_width]\
+            #origin.ljust(station_name_width)[0:station_name_width], \
+            #dest.ljust(station_name_width)[0:station_name_width],\
+            cancel_code,\
             )
     else:
         #result = f'Service {location.} not activated.'
