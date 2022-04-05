@@ -1,5 +1,6 @@
 from enum import IntFlag
-from rttapi.api import RttApi
+# from rttapi.api import RttApi
+from rttapi_extend import RttApi
 from mwlogger import Post
 import sys
 import os
@@ -278,184 +279,6 @@ def generate_arr_or_dep_list(services, query_type : QueryTypes):
             result.append(f'  >>> {service.location_detail.cancel_reason_long_text} <<<')
     return result
 
-def generate_arr_and_dep_line(s_pair):
-    station_name_width = 14
-    lateness_width = 15
-    pf_width = 10
-    ttg_width = 5
-
-    # If no destination station in the service pair
-    if(s_pair[0] == None):
-        booked_dep_time = s_pair[1].location_detail.origin[0].public_time
-        real_dep_time = s_pair[1].location_detail.origin[0].public_time
-        orig_name = s_pair[1].location_detail.origin[0].description
-        display_as = s_pair[1].location_detail.display_as
-        dep_ttg_str = createTTGString(real_dep_time)
-        if '-' in dep_ttg_str.lower():
-            dep_platform = ''
-            dep_service_location = 'Departed'
-        else:
-            dep_service_location = None
-            dep_platform = '?'
-    else:
-        booked_dep_time = s_pair[0].location_detail.gbtt_booked_departure
-        real_dep_time = s_pair[0].location_detail.realtime_departure
-        orig_name = s_pair[0].location_detail.origin[0].description
-        display_as = s_pair[0].location_detail.display_as
-        dep_ttg_str = createTTGString(real_dep_time)
-        dep_platform = s_pair[0].location_detail.platform
-        dep_service_location = s_pair[0].location_detail.service_location
-
-    if s_pair[1] == None:
-        train_id = s_pair[0].train_identity
-        #booked_arr_time = s_pair[0].location_detail.gbtt_booked_arrival
-        booked_arr_time = s_pair[0].location_detail.destination[0].public_time
-        #real_arr_time = s_pair[0].location_detail.realtime_arrival
-        real_arr_time = s_pair[0].location_detail.destination[0].public_time
-        #arr_platform = s_pair[0].location_detail.platform
-        arr_platform = '?'
-        #arr_service_location = s_pair[0].location_detail.service_location
-        arr_service_location = None
-
-        dest_name = s_pair[0].location_detail.destination[0].description
-        call_name = s_pair[0].location_detail.description
-    else:
-        train_id = s_pair[1].train_identity
-        booked_arr_time = s_pair[1].location_detail.gbtt_booked_arrival
-        real_arr_time = s_pair[1].location_detail.realtime_arrival
-        arr_platform = s_pair[1].location_detail.platform
-        arr_service_location = s_pair[1].location_detail.service_location
-
-        dest_name = s_pair[1].location_detail.destination[0].description
-        call_name = s_pair[1].location_detail.description
-
-    if((s_pair[0] != None and s_pair[0].location_detail.realtime_activated) or s_pair[1].location_detail.realtime_activated):
-    #if(True):
-        if dep_platform != 'Departed': dep_platform = f'Plat. {dep_platform}'
-        arr_platform = f'Plat. {arr_platform}'
-        dep_late = diffTimeStr(real_dep_time, booked_dep_time)
-        arr_late = diffTimeStr(real_arr_time, booked_arr_time) 
-        
-        arr_lateness = createLatenessString(arr_late, real_arr_time)
-        
-        if TrainLocations[dep_service_location] != '':
-            dep_lateness = TrainLocations[dep_service_location]
-            dep_ttg_str = ''
-        else:
-            dep_lateness = createLatenessString(dep_late, real_dep_time)
-
-        if TrainLocations[arr_service_location] != '':
-            arr_lateness = TrainLocations[arr_service_location]
-            arr_ttg_str = ''
-        else:
-            arr_lateness = createLatenessString(dep_late, real_dep_time)
-            arr_ttg_str = createTTGString(real_arr_time)
-
-
-        if 'CANCEL' in display_as.upper():
-            arr_lateness = "     Cancelled"
-            dep_lateness = "     Cancelled"
-            dep_platform = '  ---'
-            arr_platform = '  ---'
-            dep_ttg_str = ''
-            arr_ttg_str = ''
-    else:
-        return ''
-
-    line = "{}: {} {} --> {} {} {} arr {} {} {} {}"
-    result = line.format(\
-        train_id,\
-        booked_dep_time,\
-        orig_name.ljust(station_name_width)[0:station_name_width],\
-        dest_name.ljust(station_name_width)[0:station_name_width],\
-        dep_platform.ljust(pf_width)[0:pf_width],\
-        dep_lateness.ljust(lateness_width)[0:lateness_width],\
-        booked_arr_time,\
-        arr_lateness.ljust(lateness_width)[0:lateness_width],\
-        arr_platform.ljust(pf_width)[0:pf_width],\
-        call_name.ljust(station_name_width)[0:station_name_width])
-    return result
-
-def generate_arr_and_dep_list(d_services, a_services):
-    result=[]
-
-    s_pairs = []
-    dest_stations = []
-    orig_stations = []
-    train_ids = []
-
-    # Find the matching services between the departures and arrivals and pair them up
-    for d_service in d_services:
-        for a_service in a_services:
-            if(d_service.train_identity == a_service.train_identity\
-                and (d_service, a_service) not in s_pairs):
-                train_ids.append(d_service.train_identity)
-                s_pairs.append((d_service, a_service))
-
-    # Save the arrival and departure station name pairs and use these as a pattern to determin the
-    # remaing arrival stations (that don't have pairs) to keep
-    for s_pair in s_pairs:
-        dest_name = s_pair[0].location_detail.destination[0].description
-        orig_name = s_pair[0].location_detail.origin[0].description
-        if dest_name not in dest_stations:
-            dest_stations.append((orig_name, dest_name))
-        if orig_name not in orig_stations:
-            orig_stations.append((orig_name, dest_name))
-
-
-    # Go through the unmatched arrival entries, and filter out the entries that are going in the 
-    # direction we want to go in
-    for a_service in a_services:
-        if(a_service.train_identity not in train_ids):
-            dest_name = a_service.location_detail.destination[0].description
-            orig_name = a_service.location_detail.origin[0].description
-            if (orig_name, dest_name) in dest_stations:
-                s_pairs.insert(0,(None, a_service))
-
-    for d_service in d_services:
-        if(d_service.train_identity not in train_ids):
-            dest_name = d_service.location_detail.destination[0].description
-            orig_name = d_service.location_detail.origin[0].description
-            if (orig_name, dest_name) in orig_stations:
-                s_pairs.insert(0,(d_service, None))
-
-
-    # Sort s_pairs by arrival station time (not final dest or origin)
-    sort_list = []
-    for s_pair in s_pairs:
-        if s_pair[0] == None:
-            sort_list.append((s_pair[1].location_detail.gbtt_booked_arrival, s_pair[1].train_identity))
-        if s_pair[1] == None:
-            sort_list.append((s_pair[0].location_detail.gbtt_booked_arrival, s_pair[0].train_identity))
-        sort_list.sort()
-    sorted_s_pairs = []
-    for sort_item in sort_list:
-        for s_pair in s_pairs:
-            if s_pair[0] == None:
-                if s_pair[1].train_identity == sort_item[1]:
-                    sorted_s_pairs.append(s_pair)
-                    break
-            if s_pair[1] == None:
-                if s_pair[0].train_identity == sort_item[1]:
-                    sorted_s_pairs.append(s_pair)
-                    break
-
-    # Create a list of service strings to pass to the print table function
-    for s_pair in sorted_s_pairs:
-        service_line = generate_arr_and_dep_line(s_pair) 
-        if(service_line != ''): result.append(service_line)
-        # if(s_pair[0].location_detail.cancel_reason_long_text != None):
-        #     result.append(f'  >>> {s_pair[0].location_detail.cancel_reason_long_text} <<<')
-        if(s_pair[1] != None and s_pair[1].location_detail.cancel_reason_long_text != None):
-            result.append(f'  >>> {s_pair[1].location_detail.cancel_reason_long_text} <<<')
-        elif(s_pair[0] != None and s_pair[0].location_detail.cancel_reason_long_text != None):
-            result.append(f'  >>> {s_pair[0].location_detail.cancel_reason_long_text} <<<')
-        else:
-            pass
-
-    return result
-
-
 def print_table(title:str, lineList):
     header_row = ''
     lines_output = ''
@@ -506,6 +329,20 @@ def get_arr_or_dep_data(td, station, query_type):
         quit()
     return output
 
+def get_service_data_by_station(td, dep_station, arr_station):
+    global log
+    output = None
+    log.info(f'Attempting to retrieve data for services departing {dep_station} and arriving at {arr_station}...')
+    try: 
+        output = td.search_service_info_stations(dep_station, arr_station)
+    except:
+        err = sys.exc_info()
+        log.error(f'Failed to retrieve data for services from {dep_station} to {arr_station}:')
+        log.error(err[1])
+        print('Invalid service or no connection.')
+        quit()
+    return output
+
 ####### [Main] #####################################################################################
 
 log = Post('trainmon','0', 1)
@@ -535,45 +372,9 @@ elif query_type == QueryTypes.ARRIVALS:
     print_table(f'Arrivals at {arr.location.name}', generate_arr_or_dep_list(arr.services, QueryTypes.ARRIVALS))
 
 else:
-    dep = get_arr_or_dep_data(td, dep_station, QueryTypes.DEPARTURES)
-    arr = get_arr_or_dep_data(td, arr_station, QueryTypes.ARRIVALS)
-    print_table(f'Trains from {dep.location.name} to {arr.location.name}', generate_arr_and_dep_list(dep.services, arr.services))
+    dep = get_service_data_by_station(td, dep_station, arr_station)
+    print_table(f'Trains from {dep.location.name} to {dep.filter.name}', generate_arr_or_dep_list(dep.services, QueryTypes.DEPARTURES))
 
-# else:
-#     # Show departure and arrival time for the given service
-#     if service_id != '':
-#         log.info(f'Identifying train by service ID ({service_id})...')
-#         try: serv = td.fetch_service_info_datetime(service_id, date.today())
-#         except:
-#             err = sys.exc_info()
-#             log.error(f'Failed to retrieve data for service {service_id}:')
-#             log.error(err[1])
-#             print('Invalid service or no connection.')
-#             quit()
-
-#         # Find the locations specified. Departure first:
-        
-#         log.debug('CRS\tTIPLOC\tDescr\tIs call')
-#         for loc in serv.locations:
-#             log.debug(f'{loc.crs}\t{loc.tiploc}\t{loc.description}\t{loc.is_call_public_simple}')
-
-#         servDepLoc = [loc for loc in serv.locations \
-#             if (loc.crs.lower().find(dep_station.lower()) != -1  or \
-#                 loc.description.lower() == dep_station.lower() or \
-#                     loc.tiploc.lower() == dep_station.lower())]
-
-#         for loc in servDepLoc:
-#             print(generate_service_line(serv.service_uid ,loc))
-
-#         if len(servDepLoc) == 0:
-#             print(f'Service {service_id} does not call at {dep_station}')
-#             print('Valid stops:')
-#             for stop in servDepLoc:
-#                 print(f'{stop.crs} {stop.tiploc} "{stop.description}"')
-
-#         log.info(f'Finished retrieving data for service ID ({service_id})...')
-#     else:
-#         log.info(f'Identifying train by departure time ({dep_time})...')
 
 
 
