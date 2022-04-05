@@ -334,7 +334,7 @@ def get_service_data_by_station(td, dep_station, arr_station):
     output = None
     log.info(f'Attempting to retrieve data for services departing {dep_station} and arriving at {arr_station}...')
     try: 
-        output = td.search_service_info_stations(dep_station, arr_station)
+        output = td.search_service_by_stations(dep_station, arr_station)
     except:
         err = sys.exc_info()
         log.error(f'Failed to retrieve data for services from {dep_station} to {arr_station}:')

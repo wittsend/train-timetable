@@ -1,10 +1,11 @@
 import rttapi.api as api
-import rttapi.parser as parser
+#import rttapi.parser as parser
+import rttapi_parser_mod as parser
 from rttapi.model import SearchResult, Service
 
 class _Api(api._Api):
     
-    def fetch_service_info_stations(self, credentials: tuple, station_code_dep: str, station_code_arr: str) -> dict:
+    def fetch_service_by_stations(self, credentials: tuple, station_code_dep: str, station_code_arr: str) -> dict:
         """
         Requests the list of upcoming departures from a given station.
 
@@ -29,7 +30,7 @@ class RttApi(api.RttApi):
         api.RttApi.__init__(self, username, password)
         self.__api = _Api()
 
-    def search_service_info_stations(self, station_code_orig: str, station_code_dest: str) -> SearchResult:
+    def search_service_by_stations(self, station_code_orig: str, station_code_dest: str) -> SearchResult:
         """
         Requests the list of upcoming departures from a given station, filtering by destination.
 
@@ -37,6 +38,6 @@ class RttApi(api.RttApi):
 
         :return: A rttapi.model.SearchResult object mirroring the JSON reply
         """
-        json = self.__api.fetch_service_info_stations(self.credentials, station_code_orig, station_code_dest)
+        json = self.__api.fetch_service_by_stations(self.credentials, station_code_orig, station_code_dest)
         return parser.parse_search(json)
 
