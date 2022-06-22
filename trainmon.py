@@ -5,14 +5,16 @@ from mwlogger import Post
 import sys
 import os
 import time
+import datetime
 import json
-from datetime import date
+import ansicolour
+#from datetime import date
 
 class QueryTypes(IntFlag):
     DEPARTURES  = 0x1
     ARRIVALS    = 0x2
     DEP_ARR     = 0x3
-    STOPS       = 0x4
+    SERVICE     = 0x4
 
 TrainLocations = {
     None        :   "",
@@ -164,9 +166,7 @@ def parseCmdLine():
             print("Must have arrival or departure options when no service ID specified")
             printCommandLineHelp()
     else:
-        log.info('State not handled yet')
-        exit()            
-
+        query_type = QueryTypes.SERVICE
 
     return arg_usrnm, arg_api_key, arg_service_id, arg_dep_st, arg_dep_time_id, \
         arg_arr_st, arg_arr_time_id, query_type, arg_log_verb
@@ -195,48 +195,53 @@ def createTTGString(time_str : str) -> str:
     ttg = diffTimeStr(time_str, timeNowStr)
     if(ttg >= 60):
         return f'{round(ttg/60.00,1)}h'
+    elif ttg<0:
+        return 'Dep.'
     else:
         return f'{ttg}m'
 
 def createLatenessString(late : int, realtime : str) -> str:
     if late > 0:
-        return f'{late}m late ({realtime})'
+        ls = f'{late}m late ({realtime})'
+        #ls = ansicolour.set_str_colour(ls , 0, ansicolour.sgr.FG_WHITE, ansicolour.sgr.BG_RED,)
+        return ls
     elif late < 0:
         return f'{-late}m early ({realtime})'
     else:
         return f'On time'
 
 
-def generate_arr_or_dep_line(serv_id, location, query_type : QueryTypes) -> str:
+
+def generate_arr_or_dep_line(serv_id, loc, query_type : QueryTypes) -> str:
     result = ""
     station_name_width = 18
     lateness_width = 15
     pf_width = 10
     ttg_width = 5
-    origin = location.origin[0].description
-    dest = location.destination[0].description
+    origin = loc.origin[0].description
+    dest = loc.destination[0].description
     accepted_display_as = ''
-    cancel_code = location.cancel_reason_code
+    cancel_code = loc.cancel_reason_code
 
     if query_type & QueryTypes.DEP_ARR == QueryTypes.DEPARTURES:
-        realtime = location.realtime_departure
-        booked_time = location.gbtt_booked_departure
+        realtime = loc.realtime_departure
+        booked_time = loc.gbtt_booked_departure
         accepted_display_as = 'ORIGIN CALL'
-        loc = f'to {dest}'
+        locStr = f'to {dest}'
     elif query_type & QueryTypes.DEP_ARR == QueryTypes.ARRIVALS:
-        realtime = location.realtime_arrival
-        booked_time = location.gbtt_booked_arrival
+        realtime = loc.realtime_arrival
+        booked_time = loc.gbtt_booked_arrival
         accepted_display_as = 'DESTINATION CALL'
-        loc = f'from {origin}'
+        locStr = f'from {origin}'
     else:
         raise Exception(f'Invalid value for query_type {query_type}')
 
-    if(location.realtime_activated):
-        if location.display_as in accepted_display_as:
-            platform = f'Plat. {location.platform}'
+    if(loc.realtime_activated):
+        if loc.display_as in accepted_display_as:
+            platform = f'Plat. {loc.platform}'
             late = diffTimeStr(realtime, booked_time)
-            if TrainLocations[location.service_location] != '':
-                lateness = TrainLocations[location.service_location]
+            if TrainLocations[loc.service_location] != '':
+                lateness = TrainLocations[loc.service_location]
                 ttg_str = ''
             else:
                 ttg_str = createTTGString(realtime)
@@ -244,7 +249,7 @@ def generate_arr_or_dep_line(serv_id, location, query_type : QueryTypes) -> str:
 
             
         else:
-            if 'CANCELLED' in location.display_as:
+            if 'CANCELLED' in loc.display_as:
                 lateness = "     Cancelled"
                 platform = '  ---'
                 ttg_str = ''
@@ -257,7 +262,7 @@ def generate_arr_or_dep_line(serv_id, location, query_type : QueryTypes) -> str:
         result = line.format(\
             serv_id, \
             booked_time, \
-            loc.ljust(station_name_width)[0:station_name_width],\
+            locStr.ljust(station_name_width)[0:station_name_width],\
             lateness.ljust(lateness_width)[0:lateness_width], \
             ttg_str.ljust(ttg_width)[0:ttg_width], \
             platform.ljust(pf_width), \
@@ -273,11 +278,98 @@ def generate_arr_or_dep_line(serv_id, location, query_type : QueryTypes) -> str:
 def generate_arr_or_dep_list(services, query_type : QueryTypes):
     result=[]
     for service in services:
-        service_line = generate_arr_or_dep_line(service.train_identity, service.location_detail, query_type) 
+        service_line = generate_arr_or_dep_line(service.service_uid, service.location_detail, query_type) 
         if(service_line != ''): result.append(service_line)
         if(service.location_detail.cancel_reason_long_text != None):
             result.append(f'  >>> {service.location_detail.cancel_reason_long_text} <<<')
     return result
+
+def generate_service_stop_line(serv_id, loc, query_type):
+    result = ""
+    station_name_width = 18
+    lateness_width = 15
+    pf_width = 10
+    ttg_width = 5
+    origin = loc.origin[0].description
+    dest = loc.destination[0].description
+    accepted_display_as = ''
+    cancel_code = ''
+
+    # Line is assigned here so that colour can be applied to it before the values are formatted in.
+    #line = '{}: {}  {} {} {} {} --> {} {}'
+    line = '{}: {} {}  {} {} {} {}'
+
+    if query_type & QueryTypes.SERVICE != 0:
+        realtime = loc.realtime_departure
+        booked_time = loc.gbtt_booked_departure
+        accepted_display_as = 'STARTS ORIGIN CALL DESTINATION'
+        if loc.display_as == 'CALL':
+            locStr = f'- {loc.description}'
+        else:
+            locStr = f'{loc.description}'
+    elif query_type & QueryTypes.DEP_ARR == QueryTypes.DEPARTURES:
+        realtime = loc.realtime_departure
+        booked_time = loc.gbtt_booked_departure
+        accepted_display_as = 'ORIGIN CALL'
+        locStr = f'to {dest}'
+    elif query_type & QueryTypes.DEP_ARR == QueryTypes.ARRIVALS:
+        realtime = loc.realtime_arrival
+        booked_time = loc.gbtt_booked_arrival
+        accepted_display_as = 'DESTINATION CALL'
+        locStr = f'from {origin}'
+    else:
+        raise Exception(f'Invalid value for query_type {query_type}')
+
+    if(loc.realtime_activated):
+        if loc.display_as in accepted_display_as:
+            platform = f'Plat. {loc.platform}'
+            if loc.platform_changed:
+                platform = ansicolour.set_str_style(platform, [ansicolour.sgr.BLINK_SLW])
+            late = diffTimeStr(realtime, booked_time)
+            ttg_str = createTTGString(realtime)
+            if ttg_str == 'Dep.':
+                cancel_code = ''
+                line = ansicolour.set_str_style(line, [ansicolour.sgr.FG_BLACK, ansicolour.sgr.BG_CYAN])
+            if TrainLocations[loc.service_location] != '':
+                lateness = TrainLocations[loc.service_location]
+                ttg_str = ''
+                line = ansicolour.set_str_style(line, [ansicolour.sgr.BOLD, ansicolour.sgr.FG_BLACK, ansicolour.sgr.BG_GREEN])
+            else:
+                lateness = createLatenessString(late, realtime)
+
+            
+        else:
+            if 'CANCELLED' in loc.display_as:
+                lateness = "     Cancelled"
+                platform = '  ---'
+                ttg_str = ''
+                ansicolour.set_str_style(line, [ansicolour.sgr.BOLD, ansicolour.sgr.FG_WHITE, ansicolour.sgr.BG_RED])
+            else:
+                return ''
+                
+
+
+        result = line.format(\
+            serv_id.ljust(6)[0:6], \
+            booked_time, \
+            locStr.ljust(station_name_width)[0:station_name_width],\
+            lateness.ljust(lateness_width)[0:lateness_width], \
+            ttg_str.ljust(ttg_width)[0:ttg_width], \
+            platform.ljust(pf_width), \
+            #origin.ljust(station_name_width)[0:station_name_width], \
+            #dest.ljust(station_name_width)[0:station_name_width],\
+            cancel_code,\
+            )
+    else:
+        #result = f'Service {location.} not activated.'
+        pass
+    return result
+
+def generate_service_stop_list(service, query_type):
+    output = []
+    for stop in service.locations:
+        output.append(generate_service_stop_line(stop.display_as, stop, query_type))
+    return output
 
 def print_table(title:str, lineList):
     header_row = ''
@@ -343,6 +435,20 @@ def get_service_data_by_station(td, dep_station, arr_station):
         quit()
     return output
 
+def get_service_data_by_uid(td, service_id, query_type):
+    global log
+    output = None
+    log.info(f'Attempting to retrieve data for services ID {service_id}...')
+    try: 
+        output = td.fetch_service_info_datetime(service_id, datetime.datetime.now())
+    except:
+        err = sys.exc_info()
+        log.error(f'Failed to retrieve data for service ID {service_id}:')
+        log.error(err[1])
+        print('Invalid service or no connection.')
+        quit()
+    return output
+
 ####### [Main] #####################################################################################
 
 log = Post('trainmon','0', 1)
@@ -353,6 +459,7 @@ user_id, api_key, service_id, dep_station, dep_time,  arr_station, arr_time, que
 # Objects to store RttAPI info
 dep=None
 arr=None
+serv=None
 
 log.info('Connecting to RTT API...')
 try:
@@ -363,7 +470,13 @@ except:
     log.error(err[1])
     quit()
 
-if query_type == QueryTypes.DEPARTURES:
+
+
+if query_type & QueryTypes.SERVICE != 0:
+    serv = get_service_data_by_uid(td, service_id, query_type)
+    print_table(f'Service info for {service_id}', generate_service_stop_list(serv, query_type))
+
+elif query_type == QueryTypes.DEPARTURES:
     dep = get_arr_or_dep_data(td, dep_station, QueryTypes.DEPARTURES)
     print_table(f'Departures from {dep.location.name}', generate_arr_or_dep_list(dep.services, QueryTypes.DEPARTURES))
 
