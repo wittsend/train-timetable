@@ -29,14 +29,14 @@ class Post:
         timeNow = t.localtime(tmNow)
         tm_msec = tmNow - int(tmNow)
 
-        timeStr = "{0:2d}-{1:2d}-{2:2d} {3:2d}:{4:2d}:{5:2.3f}"\
+        timeStr = "{0:02d}-{1:02d}-{2:02d} {3:02d}:{4:02d}:{5:02.3f}"\
             .format(timeNow.tm_mday, timeNow.tm_mon,timeNow.tm_year,\
                 timeNow.tm_hour, timeNow.tm_min, timeNow.tm_sec + tm_msec)
 
         if(self.instanceName != ""):
-            output = "{0} {1}[{2}]:\t{3}".format(timeStr, className, instanceName, msg)
+            output = f'{timeStr} {className}[{instanceName}]:\t{msg}'
         else:
-            output = "{0} {1}:\t{2}".format(timeStr, className, msg)
+            output = f'{timeStr} {className}:\t{msg}'
 
         print(output)
 
@@ -64,6 +64,5 @@ class Post:
 
     def setVerbosity(self, verb:int):
         if verb != self.verbosity:
-            self._postMessage('POST', self.className, 'Verbosity level changing from {} to {}'\
-                .format(self.verbosity, verb))
+            self._postMessage('POST', self.className, f'Verbosity level changing from {self.verbosity} to {verb}')
             self.verbosity = verb
